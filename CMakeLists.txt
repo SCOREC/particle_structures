@@ -57,6 +57,8 @@ if (ENABLE_KOKKOS)
   message(STATUS "Kokkos CMAKE_FORTRAN_FLAGS ${KokkosCore_FORTRAN_FLAGS}")
 endif()
 
+find_package(Cabana REQUIRED)
+
 set(PS_SOURCES 
   Distribute.cpp
   Push.cpp
@@ -72,6 +74,7 @@ if (ENABLE_KOKKOS)
   target_include_directories(particleStructs PRIVATE ${KokkosKernels_INCLUDE_DIRS})
   target_link_libraries(particleStructs PRIVATE
     ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES})
+  target_link_libraries(particleStructs PUBLIC Cabana::cabana)
 endif()
 
 add_executable(pskk pskk.cpp)

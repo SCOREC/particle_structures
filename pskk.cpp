@@ -12,6 +12,7 @@
 #include <chrono>
 #include <thread>
 
+#include <Cabana_Core.hpp>
 #include <Kokkos_Core.hpp>
 
 void printTimerResolution() {
@@ -79,7 +80,7 @@ fp_t randD(fp_t fMin, fp_t fMax)
     return fMin + f * (fMax - fMin);
 }
 int main(int argc, char* argv[]) {
-  Kokkos::initialize(argc,argv);
+  Cabana::initialize(argc,argv); //initializes kokkos
   printf("floating point value size (bits): %zu\n", sizeof(fp_t));
   printf("Kokkos execution space memory %s name %s\n",
       typeid (Kokkos::DefaultExecutionSpace::memory_space).name(),
@@ -220,7 +221,7 @@ int main(int argc, char* argv[]) {
   delete [] ids;
   delete [] ptcls_per_elem;
   delete [] ptcl_to_elem;
-  Kokkos::finalize();
+  Cabana::finalize();
   fprintf(stderr,"\ndone\n");
   return 0;
 }
