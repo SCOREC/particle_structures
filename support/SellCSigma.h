@@ -405,8 +405,93 @@ template <std::size_t N>
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes,ExecSpace>::reshuffleSCS(int* new_element) {
-  //For now call rebuild
-  rebuildSCS(new_element);
+  if (num_elems < sizeof(new_element)){ 
+    rebuildSCS(new_element);
+  }
+  else{
+    printf("Sufficient space remains");
+    int activePtcls = 0;
+      for (int slice = 0; slice < num_slices; ++slice) {
+        for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
+          for (int k = 0; k < C; ++k) {
+	    if (particle_mask[j + k] && new_element[j+k] != -1 && particle_mask[j + k] != new_element[j + k]) {
+	      particle_mask[new_element[j+k]] = new_element[j+k];
+              activePtcls++;
+	}
+      }
+    }
+  }
+   if(!activePtcls) {
+     destroySCS();
+     num_ptcls = 0;
+     num_chunks = 0;
+     num_slices = 0;
+     row_to_element = 0;
+     offsets = 0;
+     slice_to_chunk = 0;
+     particle_mask = 0;
+     for (size_t i = 0; i < num_types; ++i)
+       scs_data[i] = 0;
+     return;
+  }
+  int new_num_ptcls = activePtcls;
+  
+  std::pair<int, int>* ptcls;
+  sigmaSort(num_elems, particle_mask, sigma, ptcls, false);
+  
+  int* chunk_widths;
+  int new_nchunks, new_nslices;
+  int* new_row_to_element;
+  constructChunks(ptcls, new_nchunks,new_nslices,chunk_widths,new_row_to_element);
+  
+  int* new_offsets;
+  int* new_slice_to_chunk;
+  constructOffsets(new_nchunks, new_nslices, chunk_widths,new_offsets, new_slice_to_chunk);
+  delete [] chunk_widths;
+  
+  int* new_particle_mask = new int[new_offsets[new_nslices]];
+  std::memset(new_particle_mask,0,new_offsets[new_nslices]*sizeof(int));
+  void* new_scs_data[num_types];
+  CreateSCSArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
+                                      
+  int* element_index = new int[new_nchunks * C];
+  int chunk = -1;
+  for (int i =0; i < new_nslices; ++i) {
+    if ( new_slice_to_chunk[i] == chunk)
+      continue;
+    chunk = new_slice_to_chunk[i];
+    for (int e = 0; e < C; ++e) {
+      element_index[chunk*C + e] = new_offsets[i] + e;
+    }
+  }
+  
+  for (int slice = 0; slice < num_slices; ++slice) {
+    for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
+      for (int k = 0; k < C; ++k) {
+     	int particle = j + k;
+  	  if (particle_mask[particle] && new_element[particle] != -1) {
+  	    int new_elem = new_element[particle];
+  	    int new_index = element_index[new_elem];
+  	    CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
+            element_index[new_elem] += C;
+            new_particle_mask[new_index] = 1;
+          }
+       }
+    }
+  }
+  delete [] element_index;
+  delete [] ptcls;
+  destroySCS();
+  
+  num_ptcls = new_num_ptcls;
+  num_chunks = new_nchunks;
+  num_slices = new_nslices;
+  row_to_element = new_row_to_element;
+  offsets = new_offsets;
+  slice_to_chunk = new_slice_to_chunk;
+  particle_mask = new_particle_mask;
+  for (size_t i = 0; i < num_types; ++i)
+    scs_data[i] = new_scs_data[i]; }
 }
 
 
