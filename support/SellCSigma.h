@@ -21,6 +21,7 @@
 #include <mpi.h>
 #include <unordered_map>
 #include <climits>
+#include <cassert>
 namespace particle_structs {
 
 template <typename ExecSpace> 
@@ -432,11 +433,13 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   V_ = v;
   num_elems = ne;
   num_ptcls = np;
-  
+  assert(cudaSuccess==cudaDeviceSynchronize());
+
   printf("Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
   //Perform sorting
   PairView<ExecSpace> ptcls;
   sigmaSort<ExecSpace>(ptcls, num_elems,ptcls_per_elem, sigma);
+  assert(cudaSuccess==cudaDeviceSynchronize());
 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
@@ -706,6 +709,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   }
   int new_num_ptcls = activePtcls;
   
+  assert(cudaSuccess==cudaDeviceSynchronize());
   //Perform sorting
   PairView<ExecSpace> ptcls;
   sigmaSort<ExecSpace>(ptcls,num_elems,new_particles_per_elem, sigma);
@@ -716,6 +720,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   kkLidView new_row_to_element;
   kkLidView new_element_to_row;
   constructChunks(ptcls, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
+  assert(cudaSuccess==cudaDeviceSynchronize());
 
   int new_num_slices;
   int new_capacity;
@@ -724,17 +729,23 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   //Create offsets into each chunk/vertical slice
   constructOffsets(new_nchunks, new_num_slices, chunk_widths, new_offsets, new_slice_to_chunk,
                    new_capacity);
+  assert(cudaSuccess==cudaDeviceSynchronize());
 
   //Allocate the SCS
   int new_cap = getLastValue<lid_t>(new_offsets);
+  fprintf(stderr, "%d new_cap %d\n", comm_rank, new_cap);
+  assert(cudaSuccess==cudaDeviceSynchronize());
   kkLidView new_particle_mask("new_particle_mask", new_cap);
+  assert(cudaSuccess==cudaDeviceSynchronize());
   if (swap_size < new_cap) {
     destroyViews<DataTypes>(scs_data_swap);
+    assert(cudaSuccess==cudaDeviceSynchronize());
     CreateViews<DataTypes>(scs_data_swap, new_cap*1.1);
+    assert(cudaSuccess==cudaDeviceSynchronize());
     swap_size = new_cap * 1.1;
   }
 
-  
+  assert(cudaSuccess==cudaDeviceSynchronize());
   /* //Fill the SCS */
   kkLidView interior_slice_of_chunk("interior_slice_of_chunk", new_num_slices);
   Kokkos::parallel_for("set_interior_slice_of_chunk", Kokkos::RangePolicy<>(1,new_num_slices),
@@ -743,6 +754,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
       const int prev_chunk = new_slice_to_chunk(i-1);
       interior_slice_of_chunk(i) = my_chunk == prev_chunk;
   });
+  assert(cudaSuccess==cudaDeviceSynchronize());
   lid_t C_local = C_;
   kkLidView element_index("element_index", new_nchunks * C_);
   Kokkos::parallel_for("set_element_index", new_num_slices, KOKKOS_LAMBDA(const int& i) {
@@ -752,6 +764,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
                                  (new_offsets(i) + e) * !interior_slice_of_chunk(i));
       }
   });
+  assert(cudaSuccess==cudaDeviceSynchronize());
   kkLidView new_indices("new_scs_index", capacity());
   auto copySCS = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
     const lid_t new_elem = new_element(ptcl_id);
@@ -764,9 +777,11 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
     }
   };
   parallel_for(copySCS);
+  assert(cudaSuccess==cudaDeviceSynchronize());
 
   CopySCSToSCS<SellCSigma<DataTypes, ExecSpace>, DataTypes>(this, scs_data_swap, scs_data,
                                                             new_element, new_indices);
+  assert(cudaSuccess==cudaDeviceSynchronize());
   //Add new particles
   int num_new_ptcls = new_particle_elements.size(); 
   kkLidView new_particle_indices("new_particle_scs_indices", num_new_ptcls);
