@@ -11,6 +11,8 @@ make_test(initParticles initParticles.cpp)
 
 make_test(rebuild rebuild.cpp)
 
+make_test(rebuildSweep rebuildSweep.cpp)
+
 make_test(lambdaTest lambdaTest.cpp)
 
 make_test(migrateTest migrateTest.cpp)
