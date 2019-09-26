@@ -190,6 +190,7 @@ template <typename ExecSpace>
 void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems, 
                Kokkos::View<lid_t*,typename ExecSpace::device_type> ptcls_per_elem, 
                lid_t sigma){
+  Kokkos::Profiling::pushRegion("scs_sort");
   //Make temporary copy of the particle counts for sorting
   Kokkos::resize(ptcl_pairs, num_elems);
   //PairView<ExecSpace> ptcl_pairs("ptcl_pairs", num_elems);
@@ -200,20 +201,32 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
   if (sigma > 1) {
     lid_t i;
 #ifdef SORT_ON_DEVICE
+    Kokkos::Timer timer;
     for (i = 0; i < num_elems - sigma; i+=sigma) {
       Kokkos::sort(ptcl_pairs, i, i + sigma);
     }
     Kokkos::sort(ptcl_pairs, i, num_elems);
+    auto sortTime = timer.seconds();
+    fprintf(stderr, "sigmasort (seconds) %6f\n", sigma, timer.seconds());
 #else
+    Kokkos::Timer timer;
     typename PairView<ExecSpace>::HostMirror ptcl_pairs_host = deviceToHost(ptcl_pairs);
+    auto d2hTime = timer.seconds();
+    timer.reset();
     MyPair* ptcl_pair_data = ptcl_pairs_host.data();
     for (i = 0; i < num_elems - sigma; i+=sigma) {
       std::sort(ptcl_pair_data + i, ptcl_pair_data + i + sigma);
     }
     std::sort(ptcl_pair_data + i, ptcl_pair_data + num_elems);
+    auto sortTime = timer.seconds();
+    timer.reset();
     hostToDevice(ptcl_pairs,  ptcl_pair_data);
+    auto h2dTime = timer.seconds();
+    fprintf(stderr, "sigmasort d2h sort h2d (seconds) %.6f %.6f %6f\n",
+        d2hTime, sortTime, h2dTime);
 #endif
   }
+  Kokkos::Profiling::popRegion();
 }
 
 template <typename ExecSpace>
