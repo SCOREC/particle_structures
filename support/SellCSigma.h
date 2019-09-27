@@ -206,7 +206,6 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
       Kokkos::sort(ptcl_pairs, i, i + sigma);
     }
     Kokkos::sort(ptcl_pairs, i, num_elems);
-    auto sortTime = timer.seconds();
     fprintf(stderr, "sigmasort (seconds) %6f\n", sigma, timer.seconds());
 #else
     Kokkos::Timer timer;
