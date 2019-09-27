@@ -19,8 +19,8 @@ struct MyPair {
   KOKKOS_FORCEINLINE_FUNCTION bool operator==(const volatile MyPair& p) const volatile {return first==p.first;}
   KOKKOS_FORCEINLINE_FUNCTION bool operator!=(const volatile MyPair& p) const volatile {return !(*this == p);}
   //Reverse operators in order to get largest first
-  KOKKOS_FORCEINLINE_FUNCTION bool operator<(const volatile MyPair& p) const volatile {return first > p.first || (first ==p.first && second < p.second);}
-  KOKKOS_FORCEINLINE_FUNCTION bool operator>(const volatile MyPair& p) const volatile {return first < p.first || (first==p.first && second > p.second);}
+  KOKKOS_FORCEINLINE_FUNCTION bool operator<(const volatile MyPair& p) const volatile {return first > p.first | (first ==p.first & second < p.second);}
+  KOKKOS_FORCEINLINE_FUNCTION bool operator>(const volatile MyPair& p) const volatile {return first < p.first | (first==p.first & second > p.second);}
   int first, second;
 };
 

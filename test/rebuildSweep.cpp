@@ -81,16 +81,17 @@ int main(int argc, char* argv[]) {
   bool passed = true;
   bool sortOn[2] = {0,1};
   auto sliceSz=64;
-  for(int i=0; i<2; i++) {
+  //for(int i=0; i<2; i++) {
+  int i=1;
     int sigma = sortOn[i] ? INT_MAX : 1;
-    for(int ne=1024; ne<=(1*1024*1024); ne*=2) {
+    for(int ne=1024; ne<=(1*1024); ne*=2) {
       fprintf(stderr,"ne %d sigma %d sliceSz %d\n", ne, sigma, sliceSz);
       if (!resortElementsTest(ne,sigma,sliceSz)) {
         passed = false;
         printf("[ERROR] resortElementsTest() failed\n");
       }
     }
-  }
+  //}
 
   Kokkos::finalize();
   MPI_Finalize();

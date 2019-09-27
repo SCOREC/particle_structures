@@ -206,7 +206,7 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
       Kokkos::sort(ptcl_pairs, i, i + sigma);
     }
     Kokkos::sort(ptcl_pairs, i, num_elems);
-    fprintf(stderr, "sigmasort (seconds) %6f\n", sigma, timer.seconds());
+    fprintf(stderr, "sigmasort (seconds) %.15f\n", timer.seconds());
 #else
     Kokkos::Timer timer;
     typename PairView<ExecSpace>::HostMirror ptcl_pairs_host = deviceToHost(ptcl_pairs);
@@ -221,7 +221,7 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
     timer.reset();
     hostToDevice(ptcl_pairs,  ptcl_pair_data);
     auto h2dTime = timer.seconds();
-    fprintf(stderr, "sigmasort d2h sort h2d (seconds) %.6f %.6f %6f\n",
+    fprintf(stderr, "sigmasort d2h sort h2d (seconds) %.6f %.6f %.6f\n",
         d2hTime, sortTime, h2dTime);
 #endif
   }
@@ -700,6 +700,15 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
       Kokkos::atomic_fetch_add(&(new_particles_per_elem(new_elem)), mask);
   };
   parallel_for(countNewParticles, "countNewParticles");
+
+//  ///////// HACK {
+//  const auto sz = numRows();
+//  auto foo = KOKKOS_LAMBDA(lid_t id) {
+//      new_particles_per_elem(id) = 1;
+//  };
+//  Kokkos::parallel_for("foo", sz, foo);
+//  ///////// HACK }
+
   // Add new particles to counts
   Kokkos::parallel_for("rebuild_count", new_particle_elements.size(), KOKKOS_LAMBDA(const lid_t& i) {
     const lid_t new_elem = new_particle_elements(i);
@@ -717,6 +726,18 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
     return;
   }
   lid_t new_num_ptcls = activePtcls;
+
+
+  ///////// HACK {
+  const auto sz = numRows();
+  auto foo = KOKKOS_LAMBDA(lid_t id) {
+      printf("foo %5d %6d\n", id, new_particles_per_elem(id));
+  };
+  Kokkos::parallel_for("foo", sz, foo);
+  Kokkos::Timer timer2;
+  Kokkos::sort(new_particles_per_elem,0,sz);
+  fprintf(stderr, "ps kk int sort (seconds) %f\n", timer2.seconds());
+  ///////// HACK }
   
   //Perform sorting
   Kokkos::Profiling::pushRegion("Sorting");
