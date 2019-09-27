@@ -200,7 +200,7 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
   });
   if (sigma > 1) {
     lid_t i;
-#ifdef SORT_ON_DEVICE
+#ifdef PS_SORT_ON_GPU
     Kokkos::Timer timer;
     for (i = 0; i < num_elems - sigma; i+=sigma) {
       Kokkos::sort(ptcl_pairs, i, i + sigma);

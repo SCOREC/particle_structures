@@ -17,6 +17,7 @@ include(CTest)
 
 option(PS_DEBUG "Turn on for debug output" OFF)
 option(PS_OPT "Turn on for debug output" OFF)
+option(PS_SORT_ON_GPU "Turn on for SCS sorting on GPU" OFF)
 
 if (PS_DEBUG_PREPROC)
    add_definitions(-DDEBUG)
@@ -90,6 +91,9 @@ bob_export_target(particleStructs)
 
 if (ENABLE_KOKKOS)
   add_definitions(-DKOKKOS_ENABLED)
+  if(PS_SORT_ON_GPU)
+    target_compile_definitions(particleStructs INTERFACE -DPS_SORT_ON_GPU)
+  endif()
   target_compile_definitions(particleStructs INTERFACE -DKOKKOS_ENABLED)
   target_include_directories(particleStructs INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
