@@ -69,6 +69,7 @@ set(PS_HEADERS
   support/SellCSigma.h
   support/Segment.h
   support/psAssert.h
+  support/psTsan.h
   algorithms/psParams.h
   algorithms/psTypes.h
   algorithms/Distribute.h

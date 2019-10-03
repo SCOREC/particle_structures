@@ -4,6 +4,7 @@
 #include <utility>
 #include <functional>
 #include <algorithm>
+#include "psTsan.h"
 #include "psAssert.h"
 #include "MemberTypes.h"
 #include "MemberTypeArray.h"
@@ -279,15 +280,17 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls
   const team_policy policy(nchunks, C_);
   lid_t C_local = C_;
   lid_t num_elems_local = num_elems;
-  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const typename team_policy::member_type& thread) {
-    const lid_t chunk_id = thread.league_rank();
-    const lid_t row_num = chunk_id * C_local + thread.team_rank();
-    lid_t width = 0;
-    if (row_num < num_elems_local) {
-      width = ptcls(row_num).first;
-    }
-    thread.team_reduce(Kokkos::Max<lid_t,ExecSpace>(width));
-    chunk_widths[chunk_id] = width;
+  Kokkos::parallel_for(policy,
+    KOKKOS_LAMBDA(const typename team_policy::member_type& thread)
+    PS_IMPL_TSAN_IGNORE_RACE {
+      const lid_t chunk_id = thread.league_rank();
+      const lid_t row_num = chunk_id * C_local + thread.team_rank();
+      lid_t width = 0;
+      if (row_num < num_elems_local) {
+        width = ptcls(row_num).first;
+      }
+      thread.team_reduce(Kokkos::Max<lid_t,ExecSpace>(width));
+      chunk_widths[chunk_id] = width;
   });
 }
 
@@ -295,10 +298,11 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::createGlobalMapping(kkGidView elmGid,kkGidView& elm2Gid, 
                                                            GID_Mapping& elmGid2Lid) {
   Kokkos::resize(elm2Gid, numRows());
-  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-    const gid_t gid = elmGid(i);
-    elm2Gid(i) = gid;
-    elmGid2Lid.insert(gid, i);
+  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i)
+    PS_IMPL_TSAN_IGNORE_RACE {
+      const gid_t gid = elmGid(i);
+      elm2Gid(i) = gid;
+      elmGid2Lid.insert(gid, i);
   });
   Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, numRows()), KOKKOS_LAMBDA(const lid_t& i) {
     elm2Gid(i) = -1;
