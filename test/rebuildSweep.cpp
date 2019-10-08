@@ -19,7 +19,7 @@ typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef SellCSigma<Type,exe_space> SCS;
 
 bool resortElementsTest(const int ne, const int sigma, const int sliceSz) {
-  int np = 20;
+  int np = 1024*1024;
   particle_structs::gid_t* gids = new particle_structs::gid_t[ne];
   distribute_elements(ne, 0, 0, 1, gids);
   int* ptcls_per_elem = new int[ne];
