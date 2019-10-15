@@ -359,6 +359,9 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
 
   nSlices = getLastValue<lid_t>(offset_nslices);
   Kokkos::resize(offs,nSlices + 1);
+  Kokkos::parallel_for(offs.size(), KOKKOS_LAMBDA(const lid_t& i) {
+    offs(i) = 0;
+  });
   Kokkos::resize(s2c, nSlices);
   kkLidView slice_size("slice_size", nSlices);
   const lid_t nat_size = V_*C_;
@@ -767,7 +770,9 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   //Perform sorting
   Kokkos::Profiling::pushRegion("Sorting");
   PairView<ExecSpace> ptcls;
+  assert(cudaSuccess==cudaDeviceSynchronize());
   sigmaSort<ExecSpace>(ptcls,num_elems,new_particles_per_elem, sigma);
+  assert(cudaSuccess==cudaDeviceSynchronize());
   Kokkos::Profiling::popRegion();
 
   // Number of chunks without vertical slicing
@@ -775,25 +780,34 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   lid_t new_nchunks;
   kkLidView new_row_to_element;
   kkLidView new_element_to_row;
+  assert(cudaSuccess==cudaDeviceSynchronize());
   constructChunks(ptcls, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
 
   lid_t new_num_slices;
   lid_t new_capacity;
   kkLidView new_offsets;
   kkLidView new_slice_to_chunk;
+  assert(cudaSuccess==cudaDeviceSynchronize());
   //Create offsets into each chunk/vertical slice
   constructOffsets(new_nchunks, new_num_slices, chunk_widths, new_offsets, new_slice_to_chunk,
                    new_capacity);
-
+  assert(cudaSuccess==cudaDeviceSynchronize());
   //Allocate the SCS
+  assert(new_capacity>=0);
   lid_t new_cap = getLastValue<lid_t>(new_offsets);
+  assert(cudaSuccess==cudaDeviceSynchronize());
+  assert(new_cap >= 0);
+  assert(new_capacity == new_cap);
   kkLidView new_particle_mask("new_particle_mask", new_cap);
+  assert(cudaSuccess==cudaDeviceSynchronize());
   if (swap_size < new_cap) {
+    fprintf(stderr, "%d SWAPING swap_size %d new_cap %d\n",
+        comm_rank, swap_size, new_cap);
     destroyViews<DataTypes>(scs_data_swap);
     CreateViews<DataTypes>(scs_data_swap, new_cap*1.1);
     swap_size = new_cap * 1.1;
   }
-
+  assert(cudaSuccess==cudaDeviceSynchronize());
   
   /* //Fill the SCS */
   kkLidView interior_slice_of_chunk("interior_slice_of_chunk", new_num_slices);
@@ -818,8 +832,10 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
     //TODO remove conditional
     if (mask && new_elem != -1) {
       const lid_t new_row = new_element_to_row(new_elem);
+      assert(new_row < element_index.size() && new_row >= 0);
       new_indices(ptcl_id) = Kokkos::atomic_fetch_add(&element_index(new_row), C_local);
       const lid_t new_index = new_indices(ptcl_id);
+      assert(new_index < new_particle_mask.size() && new_index >= 0);
       new_particle_mask(new_index) = 1;
     }
   };
@@ -975,14 +991,23 @@ void SellCSigma<DataTypes, ExecSpace>::parallel_for(FunctionType& fn, std::strin
 #else
   fn_d = &fn;
 #endif
+  assert(cudaSuccess==cudaDeviceSynchronize());
   const lid_t league_size = num_slices;
   const lid_t team_size = C_;
   typedef Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> team_policy;
   const team_policy policy(league_size, team_size);
+  if( cudaSuccess!=cudaDeviceSynchronize() ) {
+    fprintf(stderr, "%d SCS parallel_for %d %d\n", league_size, team_size);
+    assert(false);
+  }
   auto offsets_cpy = offsets;
+  assert(cudaSuccess==cudaDeviceSynchronize());
   auto slice_to_chunk_cpy = slice_to_chunk;
+  assert(cudaSuccess==cudaDeviceSynchronize());
   auto row_to_element_cpy = row_to_element;
+  assert(cudaSuccess==cudaDeviceSynchronize());
   auto particle_mask_cpy = particle_mask;
+  assert(cudaSuccess==cudaDeviceSynchronize());
   Kokkos::parallel_for(name, policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) {
     const lid_t slice = thread.league_rank();
     const lid_t slice_row = thread.team_rank();
@@ -998,6 +1023,7 @@ void SellCSigma<DataTypes, ExecSpace>::parallel_for(FunctionType& fn, std::strin
       });
     });
   });
+  assert(cudaSuccess==cudaDeviceSynchronize());
 }
 
 } // end namespace particle_structs
