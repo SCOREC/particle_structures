@@ -821,6 +821,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   kkLidView element_index("element_index", new_nchunks * C_);
   Kokkos::parallel_for("set_element_index", new_num_slices, KOKKOS_LAMBDA(const lid_t& i) {
       const lid_t chunk = new_slice_to_chunk(i);
+      assert(chunk >=0 && chunk < new_nchunks*C_local);
       for (lid_t e = 0; e < C_local; ++e) {
         Kokkos::atomic_fetch_add(&element_index(chunk*C_local + e),
                                  (new_offsets(i) + e) * !interior_slice_of_chunk(i));
@@ -831,11 +832,19 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
     const lid_t new_elem = new_element(ptcl_id);
     //TODO remove conditional
     if (mask && new_elem != -1) {
+      assert(new_elem >= 0);
+      assert(new_elem < new_nchunks*C_local);
       const lid_t new_row = new_element_to_row(new_elem);
-      assert(new_row < element_index.size() && new_row >= 0);
+      assert(new_row < element_index.size());
+      assert(new_row >= 0);
       new_indices(ptcl_id) = Kokkos::atomic_fetch_add(&element_index(new_row), C_local);
       const lid_t new_index = new_indices(ptcl_id);
-      assert(new_index < new_particle_mask.size() && new_index >= 0);
+      if(new_index >= new_particle_mask.size()) {
+        printf("%d elm %d ptcl %d new_row %d new_elem %d new_index %d new_particle_mask.size() %d\n",
+            comm_rank, elm_id, ptcl_id, new_row, new_elem, new_index, new_particle_mask.size());
+      }
+      assert(new_index < new_particle_mask.size());
+      assert(new_index >= 0);
       new_particle_mask(new_index) = 1;
     }
   };
