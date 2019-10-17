@@ -424,10 +424,16 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
     }
   });
   Kokkos::fence();
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   if( isRebuild ) {
     assert(cudaSuccess==cudaDeviceSynchronize());
     assert(offs.size() == offsets.size());
     Kokkos::parallel_for(nSlices, KOKKOS_LAMBDA(const lid_t& i) {
+      if(offs(i) != offsets(i)) {
+        printf("%d nslices %d i %d offsets %d offs %d\n",
+          comm_rank, nSlices, i, offsets(i), offs(i));
+      }
       assert(offs(i) == offsets(i));
     });
     assert(cudaSuccess==cudaDeviceSynchronize());
