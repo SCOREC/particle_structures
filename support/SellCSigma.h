@@ -374,6 +374,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
     if (final)
       offset_nslices(i+1) = cur;
   });
+  Kokkos::fence();
   if( isRebuild ) {
     assert(cudaSuccess==cudaDeviceSynchronize());
     assert(offset_nslices.size() == my_offset_nslices.size());
@@ -422,6 +423,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
       offs(index) = cur;
     }
   });
+  Kokkos::fence();
   if( isRebuild ) {
     assert(cudaSuccess==cudaDeviceSynchronize());
     assert(offs.size() == offsets.size());
