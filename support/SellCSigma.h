@@ -373,7 +373,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   auto h_offset_nslices = deviceToHost(offset_nslices);
   auto h_slices_per_chunk = deviceToHost(slices_per_chunk);
   for(int i=1; i<=nChunks;i++) {
-    h_offset_nslices(i) = h_offset_nslices(i-1) + h_slices_per_chunk(i);
+    h_offset_nslices(i) = h_offset_nslices(i-1) + h_slices_per_chunk(i-1);
   }
   hostToDevice(offset_nslices, h_offset_nslices.data());
 
@@ -421,7 +421,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   auto h_slice_size = deviceToHost(slice_size);
   auto h_offs = deviceToHost(offs);
   for(int i=1; i<=nSlices;i++) {
-    h_offs(i) = h_offs(i-1) + h_slice_size(i);
+    h_offs(i) = h_offs(i-1) + h_slice_size(i-1);
   }
   hostToDevice(offs, h_offs.data());
 
