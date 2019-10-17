@@ -197,6 +197,9 @@ private:
   kkLidView offsets;
   //temp
   kkLidView my_chunk_widths;
+  kkLidView my_slices_per_chunk;
+  kkLidView my_offset_nslices;
+  kkLidView my_slice_size;
 
   //map from row to element
   // row = slice_to_chunk[slice] + row_in_chunk
@@ -343,6 +346,10 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nSlices, 
                                                         kkLidView chunk_widths, kkLidView& offs,
                                                         kkLidView& s2c, lid_t& cap) {
+  bool isRebuild = false;
+  if( my_slices_per_chunk.size() != 0 ) {
+    isRebuild = true;
+  }
   kkLidView slices_per_chunk("slices_per_chunk", nChunks);
   const lid_t V_local = V_;
   Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
@@ -352,12 +359,30 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
     const bool val3 = val2 != 0;
     slices_per_chunk(i) = val1 + val3;
   });
+  if( isRebuild ) {
+    assert(cudaSuccess==cudaDeviceSynchronize());
+    assert(slices_per_chunk.size() == my_slices_per_chunk.size());
+    Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
+      assert(slices_per_chunk(i) == my_slices_per_chunk(i));
+    });
+    assert(cudaSuccess==cudaDeviceSynchronize());
+  }
+  my_slices_per_chunk = slices_per_chunk;
   kkLidView offset_nslices("offset_nslices",nChunks+1);
   Kokkos::parallel_scan(nChunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
     cur += slices_per_chunk(i);
     if (final)
       offset_nslices(i+1) += cur;
   });
+  if( isRebuild ) {
+    assert(cudaSuccess==cudaDeviceSynchronize());
+    assert(offset_nslices.size() == my_offset_nslices.size());
+    Kokkos::parallel_for(nChunks+1, KOKKOS_LAMBDA(const lid_t& i) {
+      assert(offset_nslices(i) == my_offset_nslices(i));
+    });
+    assert(cudaSuccess==cudaDeviceSynchronize());
+  }
+  my_offset_nslices = offset_nslices;
 
   nSlices = getLastValue<lid_t>(offset_nslices);
   Kokkos::resize(offs,nSlices + 1);
@@ -371,15 +396,25 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
     const lid_t start = offset_nslices(i);
     const lid_t end = offset_nslices(i+1);
+    const lid_t rem = chunk_widths(i) % V_local;
+    const lid_t val = rem + (rem==0)*V_local;
     for (lid_t j = start; j < end; ++j) {
       s2c(j) = i;
-      const lid_t rem = chunk_widths(i) % V_local;
-      const lid_t val = rem + (rem==0)*V_local;
       const bool is_last = (j == end-1);
       slice_size(j) = (!is_last) * nat_size;
       slice_size(j) += (is_last) * (val) * C_local;
     }
   });
+  if( isRebuild ) {
+    assert(cudaSuccess==cudaDeviceSynchronize());
+    assert(slice_size.size() == my_slice_size.size());
+    Kokkos::parallel_for(nSlices, KOKKOS_LAMBDA(const lid_t& i) {
+      assert(slice_size(i) == my_slice_size(i));
+    });
+    assert(cudaSuccess==cudaDeviceSynchronize());
+  }
+  my_slice_size = slice_size;
+
   Kokkos::parallel_scan(nSlices, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool final) {
     cur += slice_size(i);
     if (final) {
