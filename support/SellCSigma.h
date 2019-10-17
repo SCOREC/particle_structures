@@ -422,8 +422,17 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
       offs(index) = cur;
     }
   });
+  if( isRebuild ) {
+    assert(cudaSuccess==cudaDeviceSynchronize());
+    assert(offs.size() == offsets.size());
+    Kokkos::parallel_for(nSlices, KOKKOS_LAMBDA(const lid_t& i) {
+      assert(offs(i) == offsets(i));
+    });
+    assert(cudaSuccess==cudaDeviceSynchronize());
+  }
   cap = getLastValue<lid_t>(offs);
 }
+
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::setupParticleMask(kkLidView mask, PairView<ExecSpace> ptcls, kkLidView chunk_widths) {
   //Get start of each chunk
