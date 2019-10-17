@@ -531,7 +531,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
-  if (true) { //comm_size == 1) {
+  if (comm_size == 1) {
     rebuild(new_element);
     if(!comm_rank || comm_rank == comm_size/2)
       fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
