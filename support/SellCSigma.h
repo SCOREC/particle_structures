@@ -195,6 +195,8 @@ private:
   kkLidView particle_mask;
   //offsets into the scs structure
   kkLidView offsets;
+  //temp
+  kkLidView my_chunk_widths;
 
   //map from row to element
   // row = slice_to_chunk[slice] + row_in_chunk
@@ -485,6 +487,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
   constructChunks(ptcls, num_chunks, chunk_widths, row_to_element, element_to_row);
+  my_chunk_widths = chunk_widths;
 
   if (element_gids.size() > 0) {
     createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
@@ -782,6 +785,14 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   kkLidView new_element_to_row;
   assert(cudaSuccess==cudaDeviceSynchronize());
   constructChunks(ptcls, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
+  assert(cudaSuccess==cudaDeviceSynchronize());
+
+  //assert chunk widths is the same
+  assert(chunk_widths.size() == my_chunk_widths.size());
+  Kokkos::parallel_for("sanitychunk", my_chunk_widths.size(), KOKKOS_LAMBDA(const lid_t& i) {
+    assert(chunk_widths(i) == my_chunk_widths(i));
+  });
+  assert(cudaSuccess==cudaDeviceSynchronize());
 
   lid_t new_num_slices;
   lid_t new_capacity;
@@ -791,7 +802,17 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   //Create offsets into each chunk/vertical slice
   constructOffsets(new_nchunks, new_num_slices, chunk_widths, new_offsets, new_slice_to_chunk,
                    new_capacity);
+  assert(cudaSuccess==cudaDeviceSynchronize());
+
+  //assert offsets are the same
+  assert(offsets.size() == new_offsets.size());
+  Kokkos::parallel_for("sanityoff", new_offsets.size(), KOKKOS_LAMBDA(const lid_t& i) {
+    assert(offsets(i) == new_offsets(i));
+  });
+  assert(cudaSuccess==cudaDeviceSynchronize());
+
   assert(new_capacity==capacity()); //search is disabled
+
   assert(cudaSuccess==cudaDeviceSynchronize());
   //Allocate the SCS
   assert(new_capacity>=0);
