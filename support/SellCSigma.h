@@ -821,12 +821,15 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   kkLidView element_index("element_index", new_nchunks * C_);
   Kokkos::parallel_for("set_element_index", new_num_slices, KOKKOS_LAMBDA(const lid_t& i) {
       const lid_t chunk = new_slice_to_chunk(i);
-      assert(chunk >=0 && chunk < new_nchunks*C_local);
+      assert(chunk >=0 && chunk < new_nchunks);
       for (lid_t e = 0; e < C_local; ++e) {
         Kokkos::atomic_fetch_add(&element_index(chunk*C_local + e),
                                  (new_offsets(i) + e) * !interior_slice_of_chunk(i));
       }
   });
+
+  //for particles that remain on process determine the particle's index and set
+  // its mask to 'active'
   kkLidView new_indices("new_scs_index", capacity());
   auto copySCS = SCS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
     const lid_t new_elem = new_element(ptcl_id);
