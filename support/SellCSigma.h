@@ -791,6 +791,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   //Create offsets into each chunk/vertical slice
   constructOffsets(new_nchunks, new_num_slices, chunk_widths, new_offsets, new_slice_to_chunk,
                    new_capacity);
+  assert(new_capacity==capacity()); //search is disabled
   assert(cudaSuccess==cudaDeviceSynchronize());
   //Allocate the SCS
   assert(new_capacity>=0);
