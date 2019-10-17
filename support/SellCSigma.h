@@ -369,12 +369,14 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   }
   my_slices_per_chunk = slices_per_chunk;
   kkLidView offset_nslices("offset_nslices",nChunks+1);
-  Kokkos::parallel_scan(nChunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
-    cur += slices_per_chunk(i);
-    if (final)
-      offset_nslices(i+1) = cur;
-  });
-  Kokkos::fence();
+
+  auto h_offset_nslices = deviceToHost(offset_nslices);
+  auto h_slices_per_chunk = deviceToHost(slices_per_chunk);
+  for(int i=1; i<=nChunks;i++) {
+    h_offset_nslices(i) = h_offset_nslices(i-1) + h_slices_per_chunk(i);
+  }
+  hostToDevice(offset_nslices, h_offset_nslices.data());
+
   if( isRebuild ) {
     assert(cudaSuccess==cudaDeviceSynchronize());
     assert(offset_nslices.size() == my_offset_nslices.size());
@@ -416,14 +418,13 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   }
   my_slice_size = slice_size;
 
-  Kokkos::parallel_scan(nSlices, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool final) {
-    cur += slice_size(i);
-    if (final) {
-      const lid_t index = i+1;
-      offs(index) = cur;
-    }
-  });
-  Kokkos::fence();
+  auto h_slice_size = deviceToHost(slice_size);
+  auto h_offs = deviceToHost(offs);
+  for(int i=1; i<=nSlices;i++) {
+    h_offs(i) = h_offs(i-1) + h_slice_size(i);
+  }
+  hostToDevice(offs, h_offs.data());
+
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   if( isRebuild ) {
