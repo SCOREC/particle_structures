@@ -372,7 +372,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   Kokkos::parallel_scan(nChunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
     cur += slices_per_chunk(i);
     if (final)
-      offset_nslices(i+1) += cur;
+      offset_nslices(i+1) = cur;
   });
   if( isRebuild ) {
     assert(cudaSuccess==cudaDeviceSynchronize());
@@ -419,7 +419,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
     cur += slice_size(i);
     if (final) {
       const lid_t index = i+1;
-      offs(index) += cur;
+      offs(index) = cur;
     }
   });
   cap = getLastValue<lid_t>(offs);
