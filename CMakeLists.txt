@@ -1,7 +1,6 @@
 #Setting Version Number, Project Name
-cmake_minimum_required (VERSION 3.0)
-cmake_policy(SET CMP0054 NEW)
-project(particle_structures VERSION 0.0.1 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.7.0...${CMAKE_VERSION})
+project(particleStructs VERSION 0.0.1 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
 bob_begin_package()
@@ -36,21 +35,12 @@ option(IS_TESTING "Build for CTest" OFF)
 message(STATUS "IS_TESTING: ${IS_TESTING}")
 
 if (ENABLE_KOKKOS)
-  find_package(Kokkos REQUIRED)
   set(KOKKOS_ENABLED true)
-  include_directories(${KOKKOS_INCLUDE_DIR})
-
-  include(${KOKKOS_INCLUDE_DIR}/../kokkos_generated_settings.cmake)
-  message(STATUS "Kokkos enabled - Overriding compiler flags for consistency with Kokkos install")
-  string(REPLACE ";" " " CMAKE_CXX_FLAGS "${KOKKOS_CXX_FLAGS}")
-  message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
-
-  # bob package creation {
-  set(particle_structures_USE_Kokkos_DEFAULT ON)
-  get_filename_component(Kokkos_PREFIX ${KOKKOS_INCLUDE_DIR} DIRECTORY)
-  set(Kokkos_PREFIX_DEFAULT ${Kokkos_PREFIX}/lib/CMake)
-  bob_public_dep(Kokkos)
-  # }
+  set(particleStructs_USE_Kokkos_DEFAULT ON)
+  find_package(Kokkos 3.0 CONFIG REQUIRED)
+  #bob_add_dependency(PUBLIC NAME Kokkos TARGETS Kokkos::kokkos)
+  #get_target_property(kokkosCompileOptions Kokkos::kokkoscore INTERFACE_COMPILE_OPTIONS)
+  #message(kokkosCompileOptions ${kokkosCompileOptions})
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
@@ -97,17 +87,12 @@ if (ENABLE_KOKKOS)
   target_include_directories(particleStructs INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/algorithms>
     $<INSTALL_INTERFACE:include>)
-  target_include_directories(particleStructs PRIVATE ${KOKKOS_INCLUDE_DIR})
-  target_link_libraries(particleStructs PRIVATE
-    ${KOKKOS_LIBRARY})
-
-  include(${CMAKE_CURRENT_LIST_DIR}/cmake/detect_kokkos_opts.cmake)
-  detect_kokkos_opts()
-  if (Kokkos_HAS_CUDA)
+  target_link_libraries(particleStructs Kokkos::kokkos)
+  if ("CUDA" IN_LIST Kokkos_DEVICES)
     add_definitions(-DSCS_USE_CUDA)
     target_compile_definitions(particleStructs INTERFACE -DSCS_USE_CUDA)
   endif()
-  if (Kokkos_HAS_OpenMP)
+  if ("OPENMP" IN_LIST Kokkos_DEVICES)
     add_definitions(-DSCS_USE_OPENMP)
     target_compile_definitions(particleStructs INTERFACE -DSCS_USE_OPENMP)
   endif()
