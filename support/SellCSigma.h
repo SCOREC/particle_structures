@@ -27,6 +27,7 @@
 #include <thrust/device_ptr.h>
 #endif
 
+
 namespace {
   static bool ps_prebarrier_enabled = false;
 };
@@ -346,6 +347,9 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nSlices, 
                                                         kkLidView chunk_widths, kkLidView& offs,
                                                         kkLidView& s2c, lid_t& cap) {
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
   bool isRebuild = false;
   if( my_slices_per_chunk.size() != 0 ) {
     isRebuild = true;
@@ -368,14 +372,35 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
     assert(cudaSuccess==cudaDeviceSynchronize());
   }
   my_slices_per_chunk = slices_per_chunk;
-  kkLidView offset_nslices("offset_nslices",nChunks+1);
 
-  auto h_offset_nslices = deviceToHost(offset_nslices);
+  kkLidView offset_nslices_copy("offset_nslices",nChunks+1);
   auto h_slices_per_chunk = deviceToHost(slices_per_chunk);
+  auto h_offset_nslices = deviceToHost(offset_nslices_copy);
   for(int i=1; i<=nChunks;i++) {
     h_offset_nslices(i) = h_offset_nslices(i-1) + h_slices_per_chunk(i-1);
   }
-  hostToDevice(offset_nslices, h_offset_nslices.data());
+  hostToDevice(offset_nslices_copy, h_offset_nslices.data());
+
+  kkLidView offset_nslices("offset_nslices",nChunks+1);
+  Kokkos::parallel_scan(nChunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
+    cur += slices_per_chunk(i);
+    if (final)
+      offset_nslices(i+1) = cur;
+  });
+  Kokkos::fence();
+
+  int errors=0;
+  Kokkos::parallel_reduce(nChunks+1, KOKKOS_LAMBDA(const int i, int &r) {
+    if(offset_nslices(i) != offset_nslices_copy(i)) {
+      printf("%d Error offset_nslices %i %i %i\n",comm_rank,i,offset_nslices(i),offset_nslices_copy(i));
+      r++;
+    }
+  },errors);
+  Kokkos::fence();
+  if(errors) {
+    fprintf(stderr, "%d number of \'offsets_nslices\' scan errors %d\n", comm_rank, errors);
+    assert(!errors);
+  }
 
   if( isRebuild ) {
     assert(cudaSuccess==cudaDeviceSynchronize());
@@ -418,15 +443,36 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   }
   my_slice_size = slice_size;
 
+  kkLidView offs_copy("offs_copy",nSlices+1);
   auto h_slice_size = deviceToHost(slice_size);
-  auto h_offs = deviceToHost(offs);
+  auto h_offs = deviceToHost(offs_copy);
   for(int i=1; i<=nSlices;i++) {
     h_offs(i) = h_offs(i-1) + h_slice_size(i-1);
   }
-  hostToDevice(offs, h_offs.data());
+  hostToDevice(offs_copy, h_offs.data());
 
-  int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  Kokkos::parallel_scan(nSlices, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool final) {
+    cur += slice_size(i);
+    if (final) {
+      const lid_t index = i+1;
+      offs(index) = cur;
+    }
+  });
+  Kokkos::fence();
+
+  errors=0;
+  Kokkos::parallel_reduce(nSlices+1, KOKKOS_LAMBDA(const int i, int &r) {
+    if(offs(i) != offs_copy(i)) {
+      printf("%d Error offs %i %i %i\n",comm_rank,i,offs(i),offs_copy(i));
+      r++;
+    }
+  },errors);
+  Kokkos::fence();
+  if(errors) {
+    fprintf(stderr, "%d number of \'offs\' scan errors %d\n", comm_rank, errors);
+    assert(!errors);
+  }
+
   if( isRebuild ) {
     assert(cudaSuccess==cudaDeviceSynchronize());
     assert(offs.size() == offsets.size());
