@@ -389,20 +389,21 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   });
   Kokkos::fence();
 
-  int errors=0;
-  Kokkos::parallel_reduce(nChunks+1, KOKKOS_LAMBDA(const int i, int &r) {
-    if(offset_nslices(i) != offset_nslices_copy(i)) {
-      printf("%d Error offset_nslices %i %i %i\n",comm_rank,i,offset_nslices(i),offset_nslices_copy(i));
-      r++;
-    }
-  },errors);
-  Kokkos::fence();
-  if(errors) {
-    fprintf(stderr, "%d number of \'offsets_nslices\' scan errors %d\n", comm_rank, errors);
-    assert(!errors);
-  }
-
   if( isRebuild ) {
+    int errors=0;
+    Kokkos::parallel_reduce(nChunks+1, KOKKOS_LAMBDA(const int i, int &r) {
+      if(offset_nslices(i) != offset_nslices_copy(i)) {
+        printf("%d Error offset_nslices %d %d %d %d\n", comm_rank,
+          i,offset_nslices(i),offset_nslices_copy(i),my_offset_nslices(i));
+        r++;
+      }
+    },errors);
+    Kokkos::fence();
+    if(errors) {
+      fprintf(stderr, "%d number of \'offsets_nslices\' scan errors %d\n", comm_rank, errors);
+      assert(!errors);
+    }
+
     assert(cudaSuccess==cudaDeviceSynchronize());
     assert(offset_nslices.size() == my_offset_nslices.size());
     Kokkos::parallel_for(nChunks+1, KOKKOS_LAMBDA(const lid_t& i) {
@@ -460,20 +461,21 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   });
   Kokkos::fence();
 
-  errors=0;
-  Kokkos::parallel_reduce(nSlices+1, KOKKOS_LAMBDA(const int i, int &r) {
-    if(offs(i) != offs_copy(i)) {
-      printf("%d Error offs %i %i %i\n",comm_rank,i,offs(i),offs_copy(i));
-      r++;
-    }
-  },errors);
-  Kokkos::fence();
-  if(errors) {
-    fprintf(stderr, "%d number of \'offs\' scan errors %d\n", comm_rank, errors);
-    assert(!errors);
-  }
-
   if( isRebuild ) {
+    int errors=0;
+    Kokkos::parallel_reduce(nSlices+1, KOKKOS_LAMBDA(const int i, int &r) {
+      if(offs(i) != offs_copy(i)) {
+        printf("%d Error offs %d %d %d %d\n",comm_rank,
+          i,offs(i),offs_copy(i),offsets(i));
+        r++;
+      }
+    },errors);
+    Kokkos::fence();
+    if(errors) {
+      fprintf(stderr, "%d number of \'offs\' scan errors %d\n", comm_rank, errors);
+      assert(!errors);
+    }
+
     assert(cudaSuccess==cudaDeviceSynchronize());
     assert(offs.size() == offsets.size());
     Kokkos::parallel_for(nSlices, KOKKOS_LAMBDA(const lid_t& i) {
