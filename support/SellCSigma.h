@@ -824,13 +824,6 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   constructChunks(ptcls, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
   assert(cudaSuccess==cudaDeviceSynchronize());
 
-  //assert chunk widths is the same
-  assert(chunk_widths.size() == my_chunk_widths.size());
-  Kokkos::parallel_for("sanitychunk", my_chunk_widths.size(), KOKKOS_LAMBDA(const lid_t& i) {
-    assert(chunk_widths(i) == my_chunk_widths(i));
-  });
-  assert(cudaSuccess==cudaDeviceSynchronize());
-
   lid_t new_num_slices;
   lid_t new_capacity;
   kkLidView new_offsets;
@@ -841,16 +834,6 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
                    new_capacity);
   assert(cudaSuccess==cudaDeviceSynchronize());
 
-  //assert offsets are the same
-  assert(offsets.size() == new_offsets.size());
-  Kokkos::parallel_for("sanityoff", new_offsets.size(), KOKKOS_LAMBDA(const lid_t& i) {
-    assert(offsets(i) == new_offsets(i));
-  });
-  assert(cudaSuccess==cudaDeviceSynchronize());
-
-  assert(new_capacity==capacity()); //search is disabled
-
-  assert(cudaSuccess==cudaDeviceSynchronize());
   //Allocate the SCS
   assert(new_capacity>=0);
   lid_t new_cap = getLastValue<lid_t>(new_offsets);
