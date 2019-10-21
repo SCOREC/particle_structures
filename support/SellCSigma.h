@@ -351,9 +351,6 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
   bool isRebuild = false;
-  if( my_slices_per_chunk.size() != 0 ) {
-    isRebuild = true;
-  }
   kkLidView slices_per_chunk("slices_per_chunk", nChunks);
   const lid_t V_local = V_;
   Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
