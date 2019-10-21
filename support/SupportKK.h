@@ -27,13 +27,11 @@ template <class T, typename ExecSpace>
 
 template <typename T, typename ExecSpace>
 T getLastValue(Kokkos::View<T*, ExecSpace> view) {
-  assert(cudaSuccess==cudaDeviceSynchronize());
   const int size = view.size();
   if (size == 0)
     return 0;
   T lastVal;
   Kokkos::deep_copy(lastVal,Kokkos::subview(view,size-1));
-  assert(cudaSuccess==cudaDeviceSynchronize());
   return lastVal;
 }
 
