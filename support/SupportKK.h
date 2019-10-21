@@ -3,6 +3,12 @@
 #include <Kokkos_Core.hpp>
 #include <cassert>
 
+
+#ifdef SCS_USE_CUDA
+#include <thrust/scan.h>
+#include <thrust/execution_policy.h>
+#endif
+
 namespace particle_structs {
 
 template <class View>
@@ -118,6 +124,7 @@ template <class T, typename ExecSpace, int N, int M, int P>
 
   template <typename T>
   void exclusive_scan(T in, T out) {
+    #ifndef SCS_USE_CUDA
     const auto sz = in.size();
     assert(in.size()+1 == out.size());
     const auto h_in = deviceToHost(in);
@@ -127,18 +134,10 @@ template <class T, typename ExecSpace, int N, int M, int P>
       h_out(i) = h_out(i-1) + h_in(i-1);
     }
     hostToDevice(out,h_out.data());
-  }
-
-  template <typename T>
-  void inclusive_scan(T in, T out) {
-    const auto sz = in.size();
-    assert(in.size()+1 == out.size());
-    const auto h_in = deviceToHost(in);
-    auto h_out = deviceToHost(out);
-    h_out(0) = h_in(0);
-    for(int i=1; i<=sz;i++) {
-      h_out(i) = h_out(i-1) + h_in(i);
-    }
-    hostToDevice(out,h_out.data());
+    #else
+    const auto first = in.data();
+    const auto last = in.data()+in.size();
+    thrust::inclusive_scan(thrust::device, first, last, out.data()+1);
+    #endif
   }
 }
