@@ -196,11 +196,6 @@ private:
   kkLidView particle_mask;
   //offsets into the scs structure
   kkLidView offsets;
-  //temp
-  kkLidView my_chunk_widths;
-  kkLidView my_slices_per_chunk;
-  kkLidView my_offset_nslices;
-  kkLidView my_slice_size;
 
   //map from row to element
   // row = slice_to_chunk[slice] + row_in_chunk
@@ -350,7 +345,6 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
-  bool isRebuild = false;
   kkLidView slices_per_chunk("slices_per_chunk", nChunks);
   const lid_t V_local = V_;
   Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
@@ -360,24 +354,9 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
     const bool val3 = val2 != 0;
     slices_per_chunk(i) = val1 + val3;
   });
-  if( isRebuild ) {
-    assert(slices_per_chunk.size() == my_slices_per_chunk.size());
-    Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
-      assert(slices_per_chunk(i) == my_slices_per_chunk(i));
-    });
-  }
-  my_slices_per_chunk = slices_per_chunk;
 
   kkLidView offset_nslices("offset_nslices",nChunks+1);
   exclusive_scan(slices_per_chunk, offset_nslices);
-
-  if(isRebuild) {
-    assert(offset_nslices.size() == my_offset_nslices.size());
-    Kokkos::parallel_for(nChunks+1, KOKKOS_LAMBDA(const lid_t& i) {
-      assert(offset_nslices(i) == my_offset_nslices(i));
-    });
-  }
-  my_offset_nslices = offset_nslices;
 
   nSlices = getLastValue<lid_t>(offset_nslices);
   Kokkos::resize(offs,nSlices + 1);
@@ -400,26 +379,8 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
       slice_size(j) += (is_last) * (val) * C_local;
     }
   });
-  if( isRebuild ) {
-    assert(slice_size.size() == my_slice_size.size());
-    Kokkos::parallel_for(nSlices, KOKKOS_LAMBDA(const lid_t& i) {
-      assert(slice_size(i) == my_slice_size(i));
-    });
-  }
-  my_slice_size = slice_size;
 
   exclusive_scan(slice_size, offs);
-
-  if( isRebuild ) {
-    assert(offs.size() == offsets.size());
-    Kokkos::parallel_for(nSlices, KOKKOS_LAMBDA(const lid_t& i) {
-      if(offs(i) != offsets(i)) {
-        printf("%d nslices %d i %d offsets %d offs %d\n",
-          comm_rank, nSlices, i, offsets(i), offs(i));
-      }
-      assert(offs(i) == offsets(i));
-    });
-  }
   cap = getLastValue<lid_t>(offs);
 }
 
@@ -523,7 +484,6 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
   constructChunks(ptcls, num_chunks, chunk_widths, row_to_element, element_to_row);
-  my_chunk_widths = chunk_widths;
 
   if (element_gids.size() > 0) {
     createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
