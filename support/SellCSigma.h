@@ -374,14 +374,9 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   my_slices_per_chunk = slices_per_chunk;
 
   kkLidView offset_nslices("offset_nslices",nChunks+1);
-  auto h_slices_per_chunk = deviceToHost(slices_per_chunk);
-  auto h_offset_nslices = deviceToHost(offset_nslices);
-  for(int i=1; i<=nChunks;i++) {
-    h_offset_nslices(i) = h_offset_nslices(i-1) + h_slices_per_chunk(i-1);
-  }
-  hostToDevice(offset_nslices, h_offset_nslices.data());
+  exclusive_scan(slices_per_chunk, offset_nslices);
 
-  if(rebuild) {
+  if(isRebuild) {
     assert(cudaSuccess==cudaDeviceSynchronize());
     assert(offset_nslices.size() == my_offset_nslices.size());
     Kokkos::parallel_for(nChunks+1, KOKKOS_LAMBDA(const lid_t& i) {
@@ -422,12 +417,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   }
   my_slice_size = slice_size;
 
-  auto h_slice_size = deviceToHost(slice_size);
-  auto h_offs = deviceToHost(offs);
-  for(int i=1; i<=nSlices;i++) {
-    h_offs(i) = h_offs(i-1) + h_slice_size(i-1);
-  }
-  hostToDevice(offs, h_offs.data());
+  exclusive_scan(slice_size, offs);
 
   if( isRebuild ) {
     assert(cudaSuccess==cudaDeviceSynchronize());
@@ -489,14 +479,16 @@ void SellCSigma<DataTypes, ExecSpace>::initSCSData(kkLidView chunk_widths,
   kkLidView element_to_row_local = element_to_row;
   //Setup starting point for each row
   lid_t C_local = C_;    
-  kkLidView row_index("row_index", numRows());
-  Kokkos::parallel_scan(num_chunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& sum, const bool& final) {
-      if (final) {
-        for (lid_t j = 0; j < C_local; ++j)
-          row_index(i*C_local+j) = sum + j;
-      }
-      sum += chunk_widths(i) * C_local;
-    });
+  kkLidView row_index("row_index", numRows()+1);
+  kkLidView row_index_work("row_index_work", numRows());
+  Kokkos::parallel_for(num_chunks, KOKKOS_LAMBDA(const lid_t& i) {
+      row_index_work((i+1)*C_local-1) = chunk_widths(i)*C_local;
+  });
+  exclusive_scan(row_index_work, row_index);
+  Kokkos::parallel_for(num_chunks, KOKKOS_LAMBDA(const lid_t& i) {
+      for (lid_t j = 0; j < C_local; ++j)
+        row_index(i*C_local+j) += j;
+  });
   //Determine index for each particle
   kkLidView particle_indices("new_particle_scs_indices", given_particles);
   Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const lid_t& i) {
@@ -625,18 +617,11 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   kkLidView offset_send_particles("offset_send_particles", comm_size+1);
   kkLidView offset_send_particles_temp("offset_send_particles_temp", comm_size + 1);
   kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
-  Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const lid_t& i, lid_t& num, const bool& final) {
-    num += num_send_particles(i);
-    if (final) {
-      offset_send_particles(i+1) += num;
-      offset_send_particles_temp(i+1) += num;
-    }
+  exclusive_scan(num_send_particles,offset_send_particles);
+  Kokkos::parallel_for(offset_send_particles.size(), KOKKOS_LAMBDA(const lid_t& i) {
+      offset_send_particles_temp(i) = offset_send_particles(i);
   });
-  Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const lid_t& i, lid_t& num, const bool& final) {
-    num += num_recv_particles(i);
-    if (final)
-      offset_recv_particles(i+1) += num;
-  });
+  exclusive_scan(num_recv_particles,offset_recv_particles);
   kkLidHostMirror offset_send_particles_host = deviceToHost(offset_send_particles);
   kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
 
