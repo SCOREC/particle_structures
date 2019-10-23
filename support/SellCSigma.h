@@ -27,27 +27,11 @@
 #include <thrust/device_ptr.h>
 #endif
 
-
-namespace {
-  static bool ps_prebarrier_enabled = false;
-};
-
 namespace particle_structs {
 
-void enable_prebarrier() {
-  ps_prebarrier_enabled = true;
-}
-
-double prebarrier() {
-  if(ps_prebarrier_enabled) {
-    Kokkos::Timer timer;
-    MPI_Barrier(MPI_COMM_WORLD);
-    return timer.seconds();
-  } else {
-    return 0.0;
-  }
-}
-
+void enable_prebarrier();
+double prebarrier();
+  
 template <typename ExecSpace> 
 using PairView=Kokkos::View<MyPair*, typename ExecSpace::device_type>;
 
@@ -638,11 +622,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
       recv_num+=num_types;
     }
   }
-  PS_Comm_Waitall<ExecSpace>(num_sends, send_requests, MPI_STATUSES_IGNORE);
   PS_Comm_Waitall<ExecSpace>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
-  delete [] send_requests;
   delete [] recv_requests;
-  destroyViews<DataTypes>(send_particle);
 
   /********** Convert the received element from element gid to element lid *********/
   auto element_gid_to_lid_local = element_gid_to_lid;
@@ -652,17 +633,22 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
     recv_element(i) = element_gid_to_lid_local.value_at(index);
   });
   
-  /********** Set particles that went sent to non existent on this process *********/
+  /********** Set particles that were sent to non existent on this process *********/
   auto removeSentParticles = SCS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
-    const bool notSent = new_process(particle_id) != comm_rank;
+    const bool sent = new_process(particle_id) != comm_rank;
     const lid_t elm = new_element(particle_id);
-    Kokkos::atomic_fetch_add(&new_element(particle_id), -1 * (elm + 1) * notSent);
+    //Subtract (its value + 1) to get to -1 if it was sent, 0 otherwise
+    new_element(particle_id) -= (elm + 1) * sent;
   };
   parallel_for(removeSentParticles);
 
   /********** Combine and shift particles to their new destination **********/
   rebuild(new_element, recv_element, recv_particle);
 
+  //Cleanup
+  PS_Comm_Waitall<ExecSpace>(num_sends, send_requests, MPI_STATUSES_IGNORE);
+  delete [] send_requests;
+  destroyViews<DataTypes>(send_particle);
   destroyViews<DataTypes>(recv_particle);
   if(!comm_rank || comm_rank == comm_size/2)
     fprintf(stderr, "%d ps particle migration (seconds) %f pre-barrier (seconds) %f\n",
